@@ -108,14 +108,6 @@ const defaultColumns: ColumnConfig[] = [
         width: 200
     },
     {
-        id: 'assignees',
-        header: 'Assignees',
-        visible: true,
-        sortable: false,
-        filterType: 'text',
-        width: 150
-    },
-    {
         id: 'comments',
         header: 'Comments',
         visible: true,
@@ -154,7 +146,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     const [serverPageCache, setServerPageCache] = useState<Record<string, number>>({});
     const dataCacheRef = useRef<Record<string, GitHubIssue[]>>({});
     const serverPageCacheRef = useRef<Record<string, number>>({});
+    const tablePageCacheRef = useRef<Record<string, number>>({});
     const isFetchingMoreRef = useRef<boolean>(false);
+    const currentTablePageRef = useRef<number>(0); // Track current table page position
 
     // Debounce search input to prevent excessive API calls
     useEffect(() => {
@@ -220,7 +214,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         }
         // Reset the fetching flag when data arrives
         isFetchingMoreRef.current = false;
-    }, [serverData, currentServerPage]); // Removed allFetchedData dependency
+    }, [serverData, currentServerPage]); // Removed table dependency
 
     // Update cache refs when data changes
     useEffect(() => {
@@ -233,6 +227,10 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                 ...serverPageCacheRef.current,
                 [filterKey]: currentServerPage
             };
+            tablePageCacheRef.current = {
+                ...tablePageCacheRef.current,
+                [filterKey]: currentTablePageRef.current
+            };
 
             // Update state for UI display only (batched to prevent multiple re-renders)
             setDataCache({ ...dataCacheRef.current });
@@ -243,7 +241,8 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     // Handle filter changes - restore from cache or reset
     useEffect(() => {
         const cachedData = dataCacheRef.current[filterKey];
-        const cachedPage = serverPageCacheRef.current[filterKey];
+        const cachedServerPage = serverPageCacheRef.current[filterKey];
+        const cachedTablePage = tablePageCacheRef.current[filterKey];
 
         // Reset fetching flag when filters change
         isFetchingMoreRef.current = false;
@@ -251,11 +250,13 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         if (cachedData && cachedData.length > 0) {
             // Restore from cache
             setAllFetchedData(cachedData);
-            setCurrentServerPage(cachedPage || 1);
+            setCurrentServerPage(cachedServerPage || 1);
+            currentTablePageRef.current = cachedTablePage || 0;
         } else {
             // New filter combination, start fresh
             setCurrentServerPage(1);
             setAllFetchedData([]);
+            currentTablePageRef.current = 0;
         }
     }, [filterKey]); // Only depend on filterKey
 
@@ -446,10 +447,52 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     // React Table instance with client-side operations
     const table = useReactTable(tableOptions);
 
-    // Reset pagination when filters change
+    // Store current page position before data changes
     useEffect(() => {
-        table.setPageIndex(0);
-    }, [stateFilter, debouncedSearchValue]);
+        if (table && !isFetchingMoreRef.current) {
+            currentTablePageRef.current = table.getState().pagination.pageIndex;
+        }
+    }, [table, filteredData.length]);
+
+    // Restore page position after new data is loaded (when fetching more data)
+    useEffect(() => {
+        if (table && allFetchedData.length > 0 && currentServerPage > 1 && isFetchingMoreRef.current === false) {
+            // Only restore page if we were fetching more data and the request completed
+            const savedPage = currentTablePageRef.current;
+            const totalPages = table.getPageCount();
+
+            // Restore the saved page if it's still valid
+            if (savedPage > 0 && savedPage < totalPages) {
+                setTimeout(() => {
+                    table.setPageIndex(savedPage);
+                }, 50); // Small delay to ensure table has updated
+            }
+        }
+    }, [table, allFetchedData.length, currentServerPage]);
+
+    // Restore cached table page position when switching filters
+    useEffect(() => {
+        if (table && allFetchedData.length > 0) {
+            const cachedTablePage = tablePageCacheRef.current[filterKey];
+            if (cachedTablePage && cachedTablePage > 0) {
+                setTimeout(() => {
+                    const totalPages = table.getPageCount();
+                    if (cachedTablePage < totalPages) {
+                        table.setPageIndex(cachedTablePage);
+                    }
+                }, 100);
+            }
+        }
+    }, [table, allFetchedData.length, filterKey]);
+
+    // Reset pagination when filters change (but not when fetching more data)
+    useEffect(() => {
+        if (table && !dataCacheRef.current[filterKey]) {
+            // Only reset if there's no cached data for this filter
+            table.setPageIndex(0);
+            currentTablePageRef.current = 0;
+        }
+    }, [stateFilter, debouncedSearchValue, table, filterKey]);
 
     // Check if we need to fetch more data when user navigates to near the end
     const checkForMoreData = useCallback(() => {
@@ -469,6 +512,8 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
 
         // Fetch next server page if we're near the end and the last page was full
         if (currentPage >= totalPages - 1 && isLastServerPageFull) {
+            // Store current page position before fetching more data
+            currentTablePageRef.current = table.getState().pagination.pageIndex;
             isFetchingMoreRef.current = true;
             setCurrentServerPage(prev => prev + 1);
         }
@@ -584,10 +629,12 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                             onClick={() => {
                                 dataCacheRef.current = {};
                                 serverPageCacheRef.current = {};
+                                tablePageCacheRef.current = {};
                                 setDataCache({});
                                 setServerPageCache({});
                                 setCurrentServerPage(1);
                                 setAllFetchedData([]);
+                                currentTablePageRef.current = 0;
                                 refetch();
                             }}
                             variant="BorderStyle"
