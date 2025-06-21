@@ -382,7 +382,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
 
     // Error state component
     const ErrorState = () => (
-        <div className="text-center py-8">
+        <div className="text-center py-8 flex flex-col items-center justify-center">
             <div className="text-red-600 mb-4">
                 <AlertTriangle className="w-16 h-16 mx-auto" />
             </div>

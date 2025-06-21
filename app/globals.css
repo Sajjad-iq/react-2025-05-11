@@ -3,6 +3,7 @@
 @plugin "glare-typography";
 @plugin "mapping-color-system-v4";
 @import "mapping-color-system-v4/tailwindVars.css";
+@plugin "tailwind-scrollbar-hide";
 
 
 body {
