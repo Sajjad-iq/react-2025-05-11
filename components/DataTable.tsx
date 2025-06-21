@@ -782,7 +782,7 @@ const PaginationControls = ({
         </div>
 
         {/* Navigation buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-col">
             {/* First page shortcut (only show if far from start) */}
             {currentPage > 5 && (
                 <ActionButton

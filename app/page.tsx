@@ -2,7 +2,7 @@ import { HomeDataTable } from '@/components/shared/HomeDataTable';
 
 export default function Home() {
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto p-2 md:py-8">
       <div className="mb-8">
         <h1 className="typography-display-large-bold text-content-presentation-global-primary mb-2">
           GitHub Issues Management
