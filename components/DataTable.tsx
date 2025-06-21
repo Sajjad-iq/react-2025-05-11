@@ -57,12 +57,8 @@ import {
     ChevronLeft,
     ChevronRight
 } from 'lucide-react'
+import { InputField } from "./InputField"
 
-interface DataTableProps<TData extends { id: string | number }, TValue> {
-    columns: ColumnDef<TData, TValue>[]
-    data: TData[]
-    theme?: "dark" | "light" | "default"
-}
 
 interface GitHubIssuesDataTableProps {
     owner: string
@@ -213,7 +209,6 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         href={row.original.html_url}
                         size="M"
                         title={row.original.title}
-                        className="line-clamp-2"
                     >
                         {row.original.title}
                     </LinkButton>
@@ -227,7 +222,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                 <Badge
                     variant={row.original.state === 'open' ? 'green' : 'gray'}
                     label={row.original.state}
-                    className="capitalize"
+                    size="M"
                 />
             ),
         },
@@ -255,17 +250,17 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                             key={label.id}
                             label={label.name}
                             variant="highlight"
-                            size="XS"
+                            size="M"
                             style={{ backgroundColor: `#${label.color}`, color: '#fff' }}
-                            className="text-xs"
+                            className="!space-y-2"
                         />
                     ))}
                     {row.original.labels.length > 3 && (
                         <Badge
                             variant="gray"
                             label={`+${row.original.labels.length - 3}`}
-                            size="XS"
-                            className="text-xs"
+                            size="M"
+                            className="!space-y-2"
                         />
                     )}
                 </div>
@@ -286,7 +281,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         />
                     ))}
                     {row.original.assignees.length > 3 && (
-                        <div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs">
+                        <div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-sm">
                             +{row.original.assignees.length - 3}
                         </div>
                     )}
@@ -434,10 +429,10 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             {/* Header with controls */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900">
+                    <h2 className="typography-headers-medium-medium text-content-presentation-global-primary">
                         {owner}/{repo} Issues
                     </h2>
-                    <p className="text-gray-600 flex items-center gap-2">
+                    <p className="typography-body-small-medium flex items-center gap-2 text-content-presentation-global-secondary">
                         {pagination.total} total issues
                         {(isFetching || isRefetching) && (
                             <SpinLoading size="S" />
@@ -448,8 +443,8 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                 <div className="flex items-center gap-2">
                     <Button
                         onClick={() => { refetch(); }}
-                        variant="BorderStyle"
                         disabled={loading || isFetching}
+                        size="XL"
                     >
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Refresh
@@ -458,7 +453,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     {/* Column visibility toggle */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="BorderStyle">
+                            <Button size="XL" >
                                 <Settings className="w-4 h-4 mr-2" />
                                 Columns
                             </Button>
@@ -481,20 +476,18 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-4 p-4 bg-gray-50 rounded-lg">
-                <div className="flex-1 min-w-64">
-                    <Input
-                        placeholder="Search issues..."
-                        value={filters.search || ''}
-                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                    />
-                </div>
+            <div className="flex gap-4">
+                <InputField
+                    placeholder="Search issues..."
+                    value={filters.search || ''}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                />
 
                 <Select
                     value={filters.state || 'all'}
                     onValueChange={(value) => handleFilterChange('state', value)}
                 >
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger size={"XL"} >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -508,7 +501,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     value={pagination.pageSize.toString()}
                     onValueChange={(value) => handlePageSizeChange(parseInt(value))}
                 >
-                    <SelectTrigger className="w-20">
+                    <SelectTrigger size={"XL"}>
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -520,7 +513,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             </div>
 
             {/* Table */}
-            <div className="border rounded-lg overflow-x-auto">
+            <div className="border border-border-presentation-action-borderstyle rounded-lg overflow-x-auto">
                 {loading && <LoadingSkeleton />}
                 {error && <ErrorState />}
                 {!loading && !error && data.length === 0 && <EmptyState />}
