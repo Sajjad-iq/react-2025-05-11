@@ -147,6 +147,13 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     const [stateFilter, setStateFilter] = useState<string>('all');
     const [searchValue, setSearchValue] = useState<string>('');
     const [debouncedSearchValue, setDebouncedSearchValue] = useState<string>('');
+    const [currentServerPage, setCurrentServerPage] = useState<number>(1);
+    const [allFetchedData, setAllFetchedData] = useState<GitHubIssue[]>([]);
+    const [dataCache, setDataCache] = useState<Record<string, GitHubIssue[]>>({});
+    const [serverPageCache, setServerPageCache] = useState<Record<string, number>>({});
+    const dataCacheRef = useRef<Record<string, GitHubIssue[]>>({});
+    const serverPageCacheRef = useRef<Record<string, number>>({});
+    const isFetchingMoreRef = useRef<boolean>(false);
 
     // Debounce search input to prevent excessive API calls
     useEffect(() => {
@@ -179,42 +186,96 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         }
     }, [columnVisibility, owner, repo]);
 
-    // Fetch all data once without any server-side filtering
-    const staticHookParams = useMemo(() => ({
+    // Server-side pagination parameters
+    const serverHookParams = useMemo(() => ({
         owner,
         repo,
         sorting: [],
-        filters: { state: 'all' }, // Always fetch all issues
-        pagination: { page: 1, pageSize: 100, total: 0 },
+        filters: { state: stateFilter }, // Use current state filter
+        pagination: { page: currentServerPage, pageSize: 100, total: 0 },
         enabled: true
-    }), [owner, repo]);
+    }), [owner, repo, stateFilter, currentServerPage]);
 
-    // Data fetching with TanStack Query hook - fetch all data once
-    const { data: allData, loading, error, refetch, isRefetching, isFetching } = useGitHubIssues(staticHookParams);
+    // Data fetching with TanStack Query hook - fetch data by server page
+    const { data: serverData, loading, error, refetch, isRefetching, isFetching } = useGitHubIssues(serverHookParams);
 
-    // Client-side filtering of the data
-    const filteredData = useMemo(() => {
-        if (!allData || allData.length === 0) return [];
+    // Cache management for different filter combinations
+    const filterKey = `${stateFilter}-${debouncedSearchValue}`;
 
-        let filtered = allData;
-
-        // Filter by state
-        if (stateFilter !== 'all') {
-            filtered = filtered.filter(issue => issue.state === stateFilter);
+    // Accumulate fetched data when new server data arrives
+    useEffect(() => {
+        if (serverData && serverData.length > 0) {
+            setAllFetchedData(prevData => {
+                if (currentServerPage === 1) {
+                    // Page 1: replace all data
+                    return serverData;
+                } else {
+                    // Other pages: append new data
+                    const existingIds = new Set(prevData.map(item => item.id));
+                    const newItems = serverData.filter(item => !existingIds.has(item.id));
+                    return [...prevData, ...newItems];
+                }
+            });
         }
+        // Reset the fetching flag when data arrives
+        isFetchingMoreRef.current = false;
+    }, [serverData, currentServerPage]); // Removed allFetchedData dependency
 
-        // Filter by search term
+    // Update cache refs when data changes
+    useEffect(() => {
+        if (allFetchedData.length > 0) {
+            dataCacheRef.current = {
+                ...dataCacheRef.current,
+                [filterKey]: allFetchedData
+            };
+            serverPageCacheRef.current = {
+                ...serverPageCacheRef.current,
+                [filterKey]: currentServerPage
+            };
+
+            // Update state for UI display only (batched to prevent multiple re-renders)
+            setDataCache({ ...dataCacheRef.current });
+            setServerPageCache({ ...serverPageCacheRef.current });
+        }
+    }, [allFetchedData, filterKey, currentServerPage]);
+
+    // Handle filter changes - restore from cache or reset
+    useEffect(() => {
+        const cachedData = dataCacheRef.current[filterKey];
+        const cachedPage = serverPageCacheRef.current[filterKey];
+
+        // Reset fetching flag when filters change
+        isFetchingMoreRef.current = false;
+
+        if (cachedData && cachedData.length > 0) {
+            // Restore from cache
+            setAllFetchedData(cachedData);
+            setCurrentServerPage(cachedPage || 1);
+        } else {
+            // New filter combination, start fresh
+            setCurrentServerPage(1);
+            setAllFetchedData([]);
+        }
+    }, [filterKey]); // Only depend on filterKey
+
+    // Client-side filtering of the accumulated data (only for search, state is handled server-side)
+    const filteredData = useMemo(() => {
+        if (!allFetchedData || allFetchedData.length === 0) return [];
+
+        let filtered = allFetchedData;
+
+        // Filter by search term (state filtering is now handled server-side)
         if (debouncedSearchValue) {
             const searchTerm = debouncedSearchValue.toLowerCase();
-            filtered = filtered.filter(issue =>
+            filtered = filtered.filter((issue: GitHubIssue) =>
                 issue.title.toLowerCase().includes(searchTerm) ||
                 issue.user.login.toLowerCase().includes(searchTerm) ||
-                issue.labels.some(label => label.name.toLowerCase().includes(searchTerm))
+                issue.labels.some((label: any) => label.name.toLowerCase().includes(searchTerm))
             );
         }
 
         return filtered;
-    }, [allData, stateFilter, debouncedSearchValue]);
+    }, [allFetchedData, debouncedSearchValue]);
 
     // Memoized column definitions for performance
     const columns = useMemo<ColumnDef<GitHubIssue>[]>(() => [
@@ -380,26 +441,56 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     // React Table instance with client-side operations
     const table = useReactTable(tableOptions);
 
+    // Reset pagination when filters change
+    useEffect(() => {
+        table.setPageIndex(0);
+    }, [stateFilter, debouncedSearchValue]);
+
+    // Check if we need to fetch more data when user navigates to near the end
+    const checkForMoreData = useCallback(() => {
+        // Prevent multiple simultaneous requests
+        if (isFetchingMoreRef.current || loading || isFetching) {
+            return;
+        }
+
+        const currentPage = table.getState().pagination.pageIndex + 1;
+        const totalPages = table.getPageCount();
+
+        // If we're on the last page and have exactly 100 items per server page,
+        // there might be more data to fetch
+        const currentDataLength = filteredData.length;
+        const itemsInCurrentServerPage = currentDataLength % 100;
+        const isLastServerPageFull = itemsInCurrentServerPage === 0 && currentDataLength > 0;
+
+        // Fetch next server page if we're near the end and the last page was full
+        if (currentPage >= totalPages - 1 && isLastServerPageFull) {
+            isFetchingMoreRef.current = true;
+            setCurrentServerPage(prev => prev + 1);
+        }
+    }, [table, filteredData.length, loading, isFetching]);
+
     // Event handlers with proper dependencies
     const handleSearchChange = useCallback((value: string) => {
         setSearchValue(value);
     }, []);
 
     const handleStateFilterChange = useCallback((value: string) => {
-        console.log('State filter changing from', stateFilter, 'to', value);
         setStateFilter(value);
-    }, [stateFilter]);
+    }, []);
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
         table.setPageSize(newPageSize);
+        table.setPageIndex(0); // Reset to first page when page size changes
     }, [table]);
 
     const handlePageChange = useCallback((newPage: number) => {
         const totalPages = table.getPageCount();
         if (newPage >= 1 && newPage <= totalPages && totalPages > 0) {
             table.setPageIndex(newPage - 1);
+            // Check if we need to fetch more data after page change
+            setTimeout(checkForMoreData, 100);
         }
-    }, [table]);
+    }, [table, checkForMoreData]);
 
 
 
@@ -457,8 +548,18 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     </h2>
                     <p className="typography-body-small-medium flex items-center gap-2 text-content-presentation-global-secondary">
                         {totalItems} total issues
+                        {currentServerPage > 1 && (
+                            <span className="text-xs text-gray-400">
+                                (Page {currentServerPage} loaded)
+                            </span>
+                        )}
                         {(isFetching || isRefetching) && (
                             <SpinLoading className="w-6 h-6" />
+                        )}
+                        {Object.keys(dataCache).length > 1 && (
+                            <span className="text-xs text-blue-500">
+                                • {Object.keys(dataCache).length} filter combinations cached
+                            </span>
                         )}
                     </p>
                 </div>
@@ -472,6 +573,25 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Refresh
                     </Button>
+
+                    {Object.keys(dataCache).length > 1 && (
+                        <Button
+                            onClick={() => {
+                                dataCacheRef.current = {};
+                                serverPageCacheRef.current = {};
+                                setDataCache({});
+                                setServerPageCache({});
+                                setCurrentServerPage(1);
+                                setAllFetchedData([]);
+                                refetch();
+                            }}
+                            variant="BorderStyle"
+                            size="XL"
+                            title="Clear all cached data"
+                        >
+                            Clear Cache
+                        </Button>
+                    )}
 
                     {/* Column visibility toggle */}
                     <DropdownMenu>
@@ -525,12 +645,12 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     onValueChange={(value) => handlePageSizeChange(parseInt(value))}
                 >
                     <SelectTrigger size={"XL"}>
-                        <SelectValue />
+                        <SelectValue placeholder="Page size..." />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="10">10 per page</SelectItem>
+                        <SelectItem value="25">25 per page</SelectItem>
+                        <SelectItem value="50">50 per page</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -591,9 +711,25 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         Showing {((currentPage - 1) * pageSize) + 1} to{' '}
                         {Math.min(currentPage * pageSize, totalItems)} of{' '}
                         {totalItems} results
+                        {totalPages > 1 && (
+                            <span className="ml-2 text-gray-400">
+                                • Page {currentPage} of {totalPages}
+                            </span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {currentPage > 5 && (
+                            <ActionButton
+                                variant="BorderStyle"
+                                onClick={() => handlePageChange(1)}
+                                disabled={isFetching}
+                                size="M"
+                                title="Back to first page"
+                            >
+                                <span className="text-xs font-medium">First</span>
+                            </ActionButton>
+                        )}
                         <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(1)}
@@ -617,7 +753,11 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
 
                         <ActionButton
                             variant="BorderStyle"
-                            onClick={() => table.nextPage()}
+                            onClick={() => {
+                                table.nextPage();
+                                // Check for more data after a short delay
+                                setTimeout(checkForMoreData, 100);
+                            }}
                             disabled={!table.getCanNextPage() || isFetching}
                             size="M"
                         >
@@ -625,7 +765,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         </ActionButton>
                         <ActionButton
                             variant="BorderStyle"
-                            onClick={() => handlePageChange(totalPages)}
+                            onClick={() => {
+                                handlePageChange(totalPages);
+                            }}
                             disabled={!table.getCanNextPage() || isFetching}
                             size="M"
                         >

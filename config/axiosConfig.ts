@@ -7,6 +7,7 @@ export const apiClient = axios.create({
     headers: {
         'Accept': 'application/vnd.github.v3+json',
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GITHUB_TOKEN}`
     },
 });
 
@@ -103,14 +104,5 @@ export const retryRequest = async <T>(
     throw new Error('Unexpected error in retry logic');
 };
 
-// Network connectivity checker
-export const checkNetworkConnectivity = async (): Promise<boolean> => {
-    try {
-        await apiClient.get('/rate_limit', { timeout: 5000 });
-        return true;
-    } catch {
-        return false;
-    }
-};
 
 export default apiClient; 

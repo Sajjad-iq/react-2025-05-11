@@ -32,51 +32,32 @@ export function useGitHubIssues({
     pagination,
     enabled = true
 }: UseGitHubIssuesParams): UseGitHubIssuesReturn {
-    // Debug logging
-    useEffect(() => {
-        console.log('useGitHubIssues params changed:', { owner, repo, sorting, filters, pagination, enabled });
-    }, [owner, repo, sorting, filters, pagination, enabled]);
-
     // Memoize the query key to prevent infinite re-renders
-    const queryKey = useMemo(() => {
-        const key = [
-            'github-issues',
-            owner,
-            repo,
-            JSON.stringify(sorting),
-            JSON.stringify(filters),
-            JSON.stringify(pagination)
-        ];
-        console.log('Query key generated:', key);
-        return key;
-    }, [owner, repo, sorting, filters, pagination]);
+    const queryKey = useMemo(() => [
+        'github-issues',
+        owner,
+        repo,
+        JSON.stringify(sorting),
+        JSON.stringify(filters),
+        JSON.stringify(pagination)
+    ], [owner, repo, sorting, filters, pagination]);
 
     // Memoize API parameters to prevent unnecessary rebuilds
     const apiParams = useMemo(() => {
-        const params = githubIssuesService.convertDataTableStateToParams(
+        return githubIssuesService.convertDataTableStateToParams(
             owner,
             repo,
             sorting,
             filters,
             pagination
         );
-        console.log('API params generated:', params);
-        return params;
     }, [owner, repo, sorting, filters, pagination]);
 
     // Use TanStack Query for data fetching
     const query = useQuery({
         queryKey,
         queryFn: async (): Promise<GitHubIssuesServiceResponse> => {
-            console.log('Fetching data with params:', apiParams);
-            try {
-                const result = await githubIssuesService.getIssues(apiParams);
-                console.log('Data fetched successfully:', { count: result.data.length, totalCount: result.totalCount });
-                return result;
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                throw error;
-            }
+            return await githubIssuesService.getIssues(apiParams);
         },
         enabled,
         // Stale time: 5 minutes (data is considered fresh for 5 minutes)
@@ -85,7 +66,6 @@ export function useGitHubIssues({
         gcTime: 10 * 60 * 1000,
         // Retry configuration
         retry: (failureCount, error: any) => {
-            console.log('Retry attempt:', failureCount, error);
             // Don't retry for 4xx errors (client errors)
             if (error?.status >= 400 && error?.status < 500) {
                 return false;
@@ -103,16 +83,14 @@ export function useGitHubIssues({
     const transformedError: ApiError | null = useMemo(() => {
         if (!query.error) return null;
 
-        const error = {
+        return {
             message: (query.error as any)?.message || 'Failed to fetch issues',
             status: (query.error as any)?.status || 500,
             retry: query.failureCount < 3
         };
-        console.log('Transformed error:', error);
-        return error;
     }, [query.error, query.failureCount]);
 
-    const result = {
+    return {
         data: query.data?.data || [],
         loading: query.isLoading,
         error: transformedError,
@@ -121,15 +99,4 @@ export function useGitHubIssues({
         isRefetching: query.isRefetching,
         isFetching: query.isFetching,
     };
-
-    console.log('useGitHubIssues result:', {
-        dataLength: result.data.length,
-        loading: result.loading,
-        error: result.error,
-        totalCount: result.totalCount,
-        isRefetching: result.isRefetching,
-        isFetching: result.isFetching
-    });
-
-    return result;
 } 
