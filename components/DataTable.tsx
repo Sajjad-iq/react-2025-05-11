@@ -7,8 +7,6 @@ import {
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
-    Row,
-    SortingState,
     useReactTable,
     getPaginationRowModel,
     getFilteredRowModel,
@@ -22,11 +20,9 @@ import {
     TableHeader,
     TableRow,
 } from "./Table"
-import { Checkbox } from "./Checkbox"
 import { Button } from "./Button"
 import { ActionButton } from "./ActionButton"
 import { LinkButton } from "./LinkButton"
-import { Input } from "./Input"
 import {
     Select,
     SelectContent,
@@ -147,50 +143,51 @@ const defaultColumns: ColumnConfig[] = [
 
 // GitHub Issues DataTable Component
 export function GitHubIssuesDataTable({ owner, repo, className, theme = "default" }: GitHubIssuesDataTableProps) {
-    // State management
-    const [sorting, setSorting] = useState<SortConfig[]>([{ id: 'created_at', desc: true }]);
-    const [filters, setFilters] = useState<FilterConfig>({ state: 'all' });
-    const [pagination, setPagination] = useState<PaginationConfig>({
-        page: 1,
-        pageSize: 25,
-        total: 0
-    });
+    // Simple state for non-table functionality
+    const [stateFilter, setStateFilter] = useState<string>('all');
+    const [searchValue, setSearchValue] = useState<string>('');
+
+    // Column visibility state
     const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(`github-issues-columns-${owner}-${repo}`);
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch {
+                    // Fall back to default
+                }
+            }
+        }
         return defaultColumns.reduce((acc, col) => ({ ...acc, [col.id]: col.visible }), {});
     });
 
-    // Persist column visibility (simplified)
+    // Persist column visibility
     useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (typeof window !== 'undefined') {
-                localStorage.setItem(`github-issues-columns-${owner}-${repo}`, JSON.stringify(columnVisibility));
-            }
-        }, 100);
-        return () => clearTimeout(timeoutId);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(`github-issues-columns-${owner}-${repo}`, JSON.stringify(columnVisibility));
+        }
     }, [columnVisibility, owner, repo]);
 
-    // Data fetching with TanStack Query hook
+    // Data fetching with TanStack Query hook - fetch all data for local operations
     const { data, loading, error, refetch, totalCount, isRefetching, isFetching } = useGitHubIssues({
         owner,
         repo,
-        sorting,
-        filters,
-        pagination,
+        sorting: [], // No server-side sorting
+        filters: { state: stateFilter }, // Only server-side state filter
+        pagination: { page: 1, pageSize: 100, total: 0 }, // Fetch more data for local operations
         enabled: true
     });
 
-    // Update total count when data changes
-    useEffect(() => {
-        if (totalCount > 0 && totalCount !== pagination.total) {
-            setPagination(prev => ({ ...prev, total: totalCount }));
-        }
-    }, [totalCount]);
+
 
     // Memoized column definitions for performance
     const columns = useMemo<ColumnDef<GitHubIssue>[]>(() => [
         {
             id: 'number',
+            accessorKey: 'number',
             header: 'Issue #',
+            enableSorting: false,
             cell: ({ row }) => (
                 <LinkButton
                     href={row.original.html_url}
@@ -202,7 +199,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
         {
             id: 'title',
+            accessorKey: 'title',
             header: 'Issue Title',
+            enableSorting: true,
             cell: ({ row }) => (
                 <div className="max-w-md">
                     <LinkButton
@@ -217,7 +216,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
         {
             id: 'state',
+            accessorKey: 'state',
             header: 'Status',
+            enableSorting: false,
             cell: ({ row }) => (
                 <Badge
                     variant={row.original.state === 'open' ? 'green' : 'gray'}
@@ -228,7 +229,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
         {
             id: 'user',
+            accessorFn: (row) => row.user.login,
             header: 'Author',
+            enableSorting: false,
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
                     <img
@@ -242,7 +245,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
         {
             id: 'labels',
+            accessorFn: (row) => row.labels.map(l => l.name).join(', '),
             header: 'Labels',
+            enableSorting: false,
             cell: ({ row }) => (
                 <div className="flex flex-wrap gap-1 max-w-48">
                     {row.original.labels.slice(0, 3).map((label) => (
@@ -251,8 +256,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                             label={label.name}
                             variant="highlight"
                             size="M"
-                            style={{ backgroundColor: `#${label.color}`, color: '#fff' }}
-                            className="!space-y-2"
+                            data-theme="dark"
+                            style={{ backgroundColor: `#${label.color}` }}
+                            className="!space-y-2 [&_div]:text-[#000]"
                         />
                     ))}
                     {row.original.labels.length > 3 && (
@@ -260,37 +266,18 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                             variant="gray"
                             label={`+${row.original.labels.length - 3}`}
                             size="M"
-                            className="!space-y-2"
+                            data-theme="dark"
+                            className="!space-y-2 [&_div]:text-[#000]"
                         />
-                    )}
-                </div>
-            ),
-        },
-        {
-            id: 'assignees',
-            header: 'Assignees',
-            cell: ({ row }) => (
-                <div className="flex -space-x-1">
-                    {row.original.assignees.slice(0, 3).map((assignee) => (
-                        <img
-                            key={assignee.id}
-                            src={assignee.avatar_url}
-                            alt={assignee.login}
-                            className="w-6 h-6 rounded-full border-2 border-white"
-                            title={assignee.login}
-                        />
-                    ))}
-                    {row.original.assignees.length > 3 && (
-                        <div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-sm">
-                            +{row.original.assignees.length - 3}
-                        </div>
                     )}
                 </div>
             ),
         },
         {
             id: 'comments',
+            accessorKey: 'comments',
             header: 'Comments',
+            enableSorting: true,
             cell: ({ row }) => (
                 <div className="flex items-center gap-1">
                     <MessageCircle className="w-4 h-4 text-gray-400" />
@@ -300,7 +287,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
         {
             id: 'created_at',
+            accessorKey: 'created_at',
             header: 'Created',
+            enableSorting: true,
             cell: ({ row }) => (
                 <span className="text-sm text-gray-600">
                     {format(new Date(row.original.created_at), 'MMM dd, yyyy')}
@@ -309,7 +298,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
         {
             id: 'updated_at',
+            accessorKey: 'updated_at',
             header: 'Updated',
+            enableSorting: true,
             cell: ({ row }) => (
                 <span className="text-sm text-gray-600">
                     {format(new Date(row.original.updated_at), 'MMM dd, yyyy')}
@@ -318,76 +309,68 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
     ], []);
 
-    // React Table instance with server-side operations
+    // React Table instance with client-side operations
     const table = useReactTable({
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
-        manualPagination: true,
-        manualSorting: true,
-        manualFiltering: true,
+        getSortedRowModel: getSortedRowModel(),
+        getFilteredRowModel: getFilteredRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
         state: {
             columnVisibility,
+            globalFilter: searchValue,
         },
         onColumnVisibilityChange: setColumnVisibility,
+        onGlobalFilterChange: setSearchValue,
         enableColumnResizing: false,
-        enableSorting: false,
-        enableFilters: false,
+        enableSorting: true,
+        enableFilters: true,
+        enableGlobalFilter: true,
+        initialState: {
+            pagination: {
+                pageSize: 25,
+            },
+            sorting: [{ id: 'created_at', desc: true }],
+        },
     });
 
-    // Handlers
-    const handleSortChange = useCallback((columnId: string) => {
-        setSorting(prev => {
-            const existing = prev.find(s => s.id === columnId);
-            if (existing) {
-                if (existing.desc) {
-                    return prev.filter(s => s.id !== columnId);
-                } else {
-                    return prev.map(s => s.id === columnId ? { ...s, desc: true } : s);
-                }
-            } else {
-                return [{ id: columnId, desc: false }, ...prev.slice(0, 1)]; // Keep max 2 sort columns
-            }
-        });
-    }, []);
     // Debounce search input
     const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-    const handleFilterChange = useCallback((columnId: string, value: any) => {
-        if (columnId === 'search') {
-            // Debounce search input
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
-            searchTimeoutRef.current = setTimeout(() => {
-                setFilters(prev => ({ ...prev, [columnId]: value }));
-                setPagination(prev => ({ ...prev, page: 1 }));
-            }, 300);
-        } else {
-            setFilters(prev => ({ ...prev, [columnId]: value }));
-            setPagination(prev => ({ ...prev, page: 1 }));
+    const handleSearchChange = useCallback((value: string) => {
+        // Update local state immediately for UI responsiveness
+        setSearchValue(value);
+
+        // Debounce the actual table filter
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
         }
+        searchTimeoutRef.current = setTimeout(() => {
+            table.setGlobalFilter(value);
+        }, 300);
+    }, [table]);
+
+    const handleStateFilterChange = useCallback((value: string) => {
+        setStateFilter(value);
     }, []);
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
-        setPagination(prev => ({
-            ...prev,
-            pageSize: newPageSize,
-            page: 1
-        }));
-    }, []);
+        table.setPageSize(newPageSize);
+    }, [table]);
 
     const handlePageChange = useCallback((newPage: number) => {
-        setPagination(prev => ({
-            ...prev,
-            page: newPage
-        }));
-    }, []);
+        if (newPage >= 1 && newPage <= table.getPageCount()) {
+            table.setPageIndex(newPage - 1);
+        }
+    }, [table]);
+
+
 
     // Skeleton loading component
     const LoadingSkeleton = () => (
         <div className="space-y-2 p-4">
-            {Array.from({ length: pagination.pageSize }).map((_, i) => (
+            {Array.from({ length: 25 }).map((_, i) => (
                 <div key={i} className="flex space-x-4">
                     {columns.map((_, j) => (
                         <Skeleton key={j} className="h-4 w-full" />
@@ -422,7 +405,10 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         </div>
     );
 
-    const totalPages = Math.ceil(pagination.total / pagination.pageSize);
+    const totalPages = table.getPageCount();
+    const currentPage = table.getState().pagination.pageIndex + 1;
+    const pageSize = table.getState().pagination.pageSize;
+    const totalItems = table.getFilteredRowModel().rows.length;
 
     return (
         <div className={`space-y-4 ${className || ''}`}>
@@ -433,9 +419,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         {owner}/{repo} Issues
                     </h2>
                     <p className="typography-body-small-medium flex items-center gap-2 text-content-presentation-global-secondary">
-                        {pagination.total} total issues
+                        {totalItems} total issues
                         {(isFetching || isRefetching) && (
-                            <SpinLoading size="S" />
+                            <SpinLoading className="w-6 h-6" />
                         )}
                     </p>
                 </div>
@@ -458,7 +444,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                                 Columns
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent>
+                        <DropdownMenuContent className="z-[1000]">
                             {defaultColumns.map((column) => (
                                 <DropdownMenuCheckboxItem
                                     key={column.id}
@@ -479,13 +465,13 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             <div className="flex gap-4">
                 <InputField
                     placeholder="Search issues..."
-                    value={filters.search || ''}
-                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    value={searchValue}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                 />
 
                 <Select
-                    value={filters.state || 'all'}
-                    onValueChange={(value) => handleFilterChange('state', value)}
+                    value={stateFilter}
+                    onValueChange={handleStateFilterChange}
                 >
                     <SelectTrigger size={"XL"} >
                         <SelectValue />
@@ -498,7 +484,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                 </Select>
 
                 <Select
-                    value={pagination.pageSize.toString()}
+                    value={pageSize.toString()}
                     onValueChange={(value) => handlePageSizeChange(parseInt(value))}
                 >
                     <SelectTrigger size={"XL"}>
@@ -525,13 +511,13 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                                 <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => {
                                         const column = defaultColumns.find(col => col.id === header.id);
-                                        const sortConfig = sorting.find(s => s.id === header.id);
+                                        const sortDirection = header.column.getIsSorted();
 
                                         return (
                                             <TableHead
                                                 key={header.id}
-                                                sortType={sortConfig ? (sortConfig.desc ? 'desc' : 'asc') : undefined}
-                                                onSort={column?.sortable ? () => handleSortChange(header.id) : undefined}
+                                                sortType={sortDirection === 'desc' ? 'desc' : sortDirection === 'asc' ? 'asc' : undefined}
+                                                onSort={header.column.getCanSort() ? () => header.column.toggleSorting() : undefined}
                                                 style={{ minWidth: column?.width }}
                                             >
                                                 {header.isPlaceholder
@@ -563,37 +549,37 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             {!loading && !error && data.length > 0 && (
                 <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-600">
-                        Showing {((pagination.page - 1) * pagination.pageSize) + 1} to{' '}
-                        {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
-                        {pagination.total} results
+                        Showing {((currentPage - 1) * pageSize) + 1} to{' '}
+                        {Math.min(currentPage * pageSize, totalItems)} of{' '}
+                        {totalItems} results
                     </div>
 
                     <div className="flex items-center gap-2">
                         <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(1)}
-                            disabled={pagination.page === 1 || isFetching}
+                            disabled={!table.getCanPreviousPage() || isFetching}
                             size="M"
                         >
                             <ChevronFirst className="w-4 h-4" />
                         </ActionButton>
                         <ActionButton
                             variant="BorderStyle"
-                            onClick={() => handlePageChange(pagination.page - 1)}
-                            disabled={pagination.page === 1 || isFetching}
+                            onClick={() => table.previousPage()}
+                            disabled={!table.getCanPreviousPage() || isFetching}
                             size="M"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </ActionButton>
 
                         <span className="px-4 py-2 text-sm">
-                            Page {pagination.page} of {totalPages}
+                            Page {currentPage} of {totalPages}
                         </span>
 
                         <ActionButton
                             variant="BorderStyle"
-                            onClick={() => handlePageChange(pagination.page + 1)}
-                            disabled={pagination.page === totalPages || isFetching}
+                            onClick={() => table.nextPage()}
+                            disabled={!table.getCanNextPage() || isFetching}
                             size="M"
                         >
                             <ChevronRight className="w-4 h-4" />
@@ -601,7 +587,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(totalPages)}
-                            disabled={pagination.page === totalPages || isFetching}
+                            disabled={!table.getCanNextPage() || isFetching}
                             size="M"
                         >
                             <ChevronLast className="w-4 h-4" />
