@@ -33,6 +33,7 @@ import {
 import { Badge } from "./Badge"
 import { Skeleton } from "./Skeleton"
 import { SpinLoading } from "./SpinLoading"
+import { Avatar, AvatarImage, AvatarFallback } from "./Avatar"
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -330,11 +331,15 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             enableSorting: false,
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
-                    <img
-                        src={row.original.user.avatar_url}
-                        alt={row.original.user.login}
-                        className="w-6 h-6 rounded-full"
-                    />
+                    <Avatar className="h-6 w-6">
+                        <AvatarImage
+                            src={row.original.user.avatar_url}
+                            alt={`@${row.original.user.login}`}
+                        />
+                        <AvatarFallback className="text-xs">
+                            {row.original.user.login.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                    </Avatar>
                     <span className="text-sm">{row.original.user.login}</span>
                 </div>
             ),
@@ -747,7 +752,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                             <ChevronLeft className="w-4 h-4" />
                         </ActionButton>
 
-                        <span className="px-4 py-2 text-sm">
+                        <span className="px-4 py-2 text-sm text-content-presentation-global-secondary">
                             Page {currentPage} of {totalPages}
                         </span>
 

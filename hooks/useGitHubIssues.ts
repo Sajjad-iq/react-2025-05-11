@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { GitHubIssue, SortConfig, FilterConfig, PaginationConfig, ApiError } from '../utils/types';
 import { githubIssuesService, GitHubIssuesServiceResponse } from '../services/githubIssuesService';
 
