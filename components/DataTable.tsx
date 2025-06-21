@@ -615,7 +615,7 @@ const TableHeader = ({
             <h2 className="typography-headers-medium-medium text-content-presentation-global-primary">
                 {owner}/{repo} Issues
             </h2>
-            <p className="typography-body-small-medium flex items-center gap-2 text-content-presentation-global-secondary">
+            <div className="typography-body-small-medium flex items-center gap-2 text-content-presentation-global-secondary">
                 {totalItems} total issues
                 {/* Show current server page if more than 1 page loaded */}
                 {currentServerPage > 1 && (
@@ -633,7 +633,7 @@ const TableHeader = ({
                         • {cacheCount} filter combinations cached
                     </span>
                 )}
-            </p>
+            </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -768,22 +768,27 @@ const PaginationControls = ({
     onCheckForMoreData,
     isFetching
 }: PaginationControlsProps) => (
-    <div className="flex items-center justify-between">
-        {/* Page information */}
-        <div className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * pageSize) + 1} to{' '}
-            {Math.min(currentPage * pageSize, totalItems)} of{' '}
-            {totalItems} results
-            {totalPages > 1 && (
-                <span className="ml-2 text-gray-400">
-                    • Page {currentPage} of {totalPages}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Page information - responsive text sizing and layout */}
+        <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-0">
+                <span>
+                    Showing {((currentPage - 1) * pageSize) + 1} to{' '}
+                    {Math.min(currentPage * pageSize, totalItems)} of{' '}
+                    {totalItems} results
                 </span>
-            )}
+                {totalPages > 1 && (
+                    <span className="text-gray-400 sm:ml-2">
+                        <span className="hidden sm:inline">• </span>
+                        Page {currentPage} of {totalPages}
+                    </span>
+                )}
+            </div>
         </div>
 
-        {/* Navigation buttons */}
-        <div className="flex items-center gap-2 flex-col">
-            {/* First page shortcut (only show if far from start) */}
+        {/* Navigation buttons - responsive layout and sizing */}
+        <div className="flex items-center justify-center gap-1 sm:gap-2 order-1 sm:order-2">
+            {/* First page shortcut (only show on larger screens and if far from start) */}
             {currentPage > 5 && (
                 <ActionButton
                     variant="BorderStyle"
@@ -791,6 +796,7 @@ const PaginationControls = ({
                     disabled={isFetching}
                     size="M"
                     title="Back to first page"
+                    className="hidden sm:flex"
                 >
                     <span className="text-xs font-medium">First</span>
                 </ActionButton>
@@ -802,8 +808,10 @@ const PaginationControls = ({
                 onClick={() => onPageChange(1)}
                 disabled={!table.getCanPreviousPage() || isFetching}
                 size="M"
+                className="flex-shrink-0"
+                title="First page"
             >
-                <ChevronFirst className="w-4 h-4" />
+                <ChevronFirst className="w-3 h-3 sm:w-4 sm:h-4" />
             </ActionButton>
 
             {/* Previous page button */}
@@ -812,13 +820,16 @@ const PaginationControls = ({
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage() || isFetching}
                 size="M"
+                className="flex-shrink-0"
+                title="Previous page"
             >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
             </ActionButton>
 
-            {/* Current page indicator */}
-            <span className="px-4 py-2 text-sm text-content-presentation-global-secondary">
-                Page {currentPage} of {totalPages}
+            {/* Current page indicator - more compact on mobile */}
+            <span className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm text-content-presentation-global-secondary whitespace-nowrap">
+                <span className="sm:hidden">{currentPage}/{totalPages}</span>
+                <span className="hidden sm:inline">Page {currentPage} of {totalPages}</span>
             </span>
 
             {/* Next page button with auto-fetch */}
@@ -831,8 +842,10 @@ const PaginationControls = ({
                 }}
                 disabled={!table.getCanNextPage() || isFetching}
                 size="M"
+                className="flex-shrink-0"
+                title="Next page"
             >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
             </ActionButton>
 
             {/* Last page button */}
@@ -841,8 +854,10 @@ const PaginationControls = ({
                 onClick={() => onPageChange(totalPages)}
                 disabled={!table.getCanNextPage() || isFetching}
                 size="M"
+                className="flex-shrink-0"
+                title="Last page"
             >
-                <ChevronLast className="w-4 h-4" />
+                <ChevronLast className="w-3 h-3 sm:w-4 sm:h-4" />
             </ActionButton>
         </div>
     </div>
