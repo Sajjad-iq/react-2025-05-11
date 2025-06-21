@@ -42,7 +42,7 @@ interface ProvidersProps {
     children: React.ReactNode
 }
 
-export function Providers({ children }: ProvidersProps) {
+export function ReactQueryClient({ children }: ProvidersProps) {
     const client = getQueryClient()
 
     return (
