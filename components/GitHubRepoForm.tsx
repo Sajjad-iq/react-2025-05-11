@@ -38,21 +38,14 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-interface GitHubRepoFormProps {
-    onRepoChange: (owner: string, repo: string) => void;
-    currentOwner: string;
-    currentRepo: string;
+interface RepoInfo {
+    owner: string;
+    repo: string;
 }
 
-export function GitHubRepoForm({ onRepoChange, currentOwner, currentRepo }: GitHubRepoFormProps) {
-    const form = useForm<FormData>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-            gitUrl: '',
-        },
-    });
-
-    const extractRepoFromUrl = (url: string): { owner: string; repo: string } | null => {
+// Custom hook for URL parsing logic
+const useRepoUrlParser = () => {
+    const extractRepoFromUrl = (url: string): RepoInfo | null => {
         try {
             // Remove trailing slash and .git if present
             const cleanUrl = url.replace(/\/$/, '').replace(/\.git$/, '');
@@ -85,6 +78,20 @@ export function GitHubRepoForm({ onRepoChange, currentOwner, currentRepo }: GitH
         }
     };
 
+    return { extractRepoFromUrl };
+};
+
+// Custom hook for form logic
+const useRepoForm = (onRepoChange: (owner: string, repo: string) => void) => {
+    const { extractRepoFromUrl } = useRepoUrlParser();
+
+    const form = useForm<FormData>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            gitUrl: '',
+        },
+    });
+
     const onSubmit = (data: FormData) => {
         const extracted = extractRepoFromUrl(data.gitUrl.trim());
 
@@ -99,14 +106,78 @@ export function GitHubRepoForm({ onRepoChange, currentOwner, currentRepo }: GitH
         form.reset();
     };
 
+    return {
+        form,
+        onSubmit,
+        handleReset
+    };
+};
+
+// Sub-component for the current repository display
+interface CurrentRepoDisplayProps {
+    owner: string;
+    repo: string;
+}
+
+const CurrentRepoDisplay = ({ owner, repo }: CurrentRepoDisplayProps) => (
+    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+        <p className="typography-body-small-regular text-blue-800">
+            <strong>Currently viewing:</strong> {owner}/{repo}
+            {owner === 'facebook' && repo === 'react' && ' (default)'}
+        </p>
+    </div>
+);
+
+// Sub-component for the form header
+const FormHeader = () => (
+    <>
+        <h2 className="typography-headers-medium-medium text-content-presentation-global-primary mb-4">
+            Repository Configuration
+        </h2>
+        <p className="typography-body-medium-regular text-content-presentation-global-secondary mb-4">
+            Paste any GitHub repository URL to view its issues, or use the default React repository.
+        </p>
+    </>
+);
+
+// Sub-component for form actions
+interface FormActionsProps {
+    onReset: () => void;
+}
+
+const FormActions = ({ onReset }: FormActionsProps) => (
+    <div className="flex gap-2">
+        <Button
+            type="submit"
+            size="XL"
+        >
+            Load Issues
+        </Button>
+        <Button
+            type="button"
+            variant="BorderStyle"
+            size="XL"
+            onClick={onReset}
+        >
+            Reset to Default
+        </Button>
+    </div>
+);
+
+// Main component interface
+interface GitHubRepoFormProps {
+    onRepoChange: (owner: string, repo: string) => void;
+    currentOwner: string;
+    currentRepo: string;
+}
+
+// Main component - now much cleaner
+export function GitHubRepoForm({ onRepoChange, currentOwner, currentRepo }: GitHubRepoFormProps) {
+    const { form, onSubmit, handleReset } = useRepoForm(onRepoChange);
+
     return (
         <div className="p-6 rounded-lg border mb-8 bg-background-system-body-secondary">
-            <h2 className="typography-headers-medium-medium text-content-presentation-global-primary mb-4">
-                Repository Configuration
-            </h2>
-            <p className="typography-body-medium-regular text-content-presentation-global-secondary mb-4">
-                Paste any GitHub repository URL to view its issues, or use the default React repository.
-            </p>
+            <FormHeader />
 
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -134,31 +205,11 @@ export function GitHubRepoForm({ onRepoChange, currentOwner, currentRepo }: GitH
                         )}
                     />
 
-                    <div className="flex gap-2">
-                        <Button
-                            type="submit"
-                            size="XL"
-                        >
-                            Load Issues
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="BorderStyle"
-                            size="XL"
-                            onClick={handleReset}
-                        >
-                            Reset to Default
-                        </Button>
-                    </div>
+                    <FormActions onReset={handleReset} />
                 </form>
             </Form>
 
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                <p className="typography-body-small-regular text-blue-800">
-                    <strong>Currently viewing:</strong> {currentOwner}/{currentRepo}
-                    {currentOwner === 'facebook' && currentRepo === 'react' && ' (default)'}
-                </p>
-            </div>
+            <CurrentRepoDisplay owner={currentOwner} repo={currentRepo} />
         </div>
     );
 } 
