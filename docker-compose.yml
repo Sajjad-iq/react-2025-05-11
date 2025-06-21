@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Production React/Next.js application
+  react-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=${NODE_ENV:-production}
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_TELEMETRY_DISABLED=${NEXT_TELEMETRY_DISABLED:-1}
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - APP_NAME=${APP_NAME:-React GitHub Issues DataTable}
+      - APP_VERSION=${APP_VERSION:-0.1.0}
+      - APP_URL=${APP_URL:-http://localhost:3000}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_API_URL=${GITHUB_API_URL:-https://api.github.com}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development React/Next.js application (alternative service)
+  react-app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - NODE_ENV=development
+    ports:
+      - "${DEV_PORT:-3001}:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=${NEXT_TELEMETRY_DISABLED:-1}
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - APP_NAME=${APP_NAME:-React GitHub Issues DataTable}
+      - APP_VERSION=${APP_VERSION:-0.1.0}
+      - APP_URL=${APP_URL:-http://localhost:3001}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_API_URL=${GITHUB_API_URL:-https://api.github.com}
+      - FAST_REFRESH=true
+      - CHOKIDAR_USEPOLLING=true
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    restart: unless-stopped
+    profiles:
+      - dev
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  node_modules:
+  next_cache: 

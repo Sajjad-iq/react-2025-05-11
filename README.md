@@ -1,4 +1,63 @@
 
+# React GitHub Issues DataTable
+
+A professional React/Next.js application featuring an advanced GitHub Issues DataTable with enterprise-grade functionality.
+
+## 🚀 Quick Start with Docker
+
+### Production Build
+```bash
+# Build and run the production container
+docker-compose up --build
+
+# Or run in background
+docker-compose up -d --build
+```
+The application will be available at http://localhost:3000
+
+### Development Mode
+```bash
+# Run in development mode with hot reloading
+docker-compose --profile dev up --build react-app-dev
+```
+The development server will be available at http://localhost:3001
+
+### Docker Commands
+```bash
+# Stop all services
+docker-compose down
+
+# View logs
+docker-compose logs -f react-app
+
+# Rebuild containers
+docker-compose build --no-cache
+
+# Health check
+curl http://localhost:3000/api/health
+```
+
+## 🛠️ Local Development
+
+### Prerequisites
+- Node.js 18+
+- pnpm (recommended) or npm
+
+### Installation
+```bash
+# Install dependencies
+pnpm install
+
+# Run development server
+pnpm dev
+
+# Build for production
+pnpm build
+
+# Start production server
+pnpm start
+```
+
 ## Professional React Developer Test: Advanced Datatable \& Logic Challenge
 
 ### Task 1: Enterprise-Grade User Management Datatable (2-3 hours)
