@@ -39,7 +39,7 @@ import {
     DropdownMenuContent,
     DropdownMenuCheckboxItem
 } from "./DropdownMenu"
-import { GitHubIssue, ColumnConfig, SortConfig, FilterConfig, PaginationConfig } from "../utils/types"
+import { GitHubIssue, ColumnConfig } from "../utils/types"
 import { useGitHubIssues } from "../hooks/useGitHubIssues"
 import { format } from 'date-fns'
 import {
@@ -146,6 +146,16 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     // Simple state for non-table functionality
     const [stateFilter, setStateFilter] = useState<string>('all');
     const [searchValue, setSearchValue] = useState<string>('');
+    const [debouncedSearchValue, setDebouncedSearchValue] = useState<string>('');
+
+    // Debounce search input to prevent excessive API calls
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchValue(searchValue);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [searchValue]);
 
     // Column visibility state
     const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
@@ -169,18 +179,42 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         }
     }, [columnVisibility, owner, repo]);
 
-    // Memoize the hook parameters to prevent infinite re-renders
-    const hookParams = useMemo(() => ({
+    // Fetch all data once without any server-side filtering
+    const staticHookParams = useMemo(() => ({
         owner,
         repo,
-        sorting: [], // No server-side sorting
-        filters: { state: stateFilter }, // Only server-side state filter
-        pagination: { page: 1, pageSize: 100, total: 0 }, // Fetch more data for local operations
+        sorting: [],
+        filters: { state: 'all' }, // Always fetch all issues
+        pagination: { page: 1, pageSize: 100, total: 0 },
         enabled: true
-    }), [owner, repo, stateFilter]);
+    }), [owner, repo]);
 
-    // Data fetching with TanStack Query hook - fetch all data for local operations
-    const { data, loading, error, refetch, totalCount, isRefetching, isFetching } = useGitHubIssues(hookParams);
+    // Data fetching with TanStack Query hook - fetch all data once
+    const { data: allData, loading, error, refetch, isRefetching, isFetching } = useGitHubIssues(staticHookParams);
+
+    // Client-side filtering of the data
+    const filteredData = useMemo(() => {
+        if (!allData || allData.length === 0) return [];
+
+        let filtered = allData;
+
+        // Filter by state
+        if (stateFilter !== 'all') {
+            filtered = filtered.filter(issue => issue.state === stateFilter);
+        }
+
+        // Filter by search term
+        if (debouncedSearchValue) {
+            const searchTerm = debouncedSearchValue.toLowerCase();
+            filtered = filtered.filter(issue =>
+                issue.title.toLowerCase().includes(searchTerm) ||
+                issue.user.login.toLowerCase().includes(searchTerm) ||
+                issue.labels.some(label => label.name.toLowerCase().includes(searchTerm))
+            );
+        }
+
+        return filtered;
+    }, [allData, stateFilter, debouncedSearchValue]);
 
     // Memoized column definitions for performance
     const columns = useMemo<ColumnDef<GitHubIssue>[]>(() => [
@@ -313,64 +347,59 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     // Memoize table state to prevent unnecessary re-renders
     const tableState = useMemo(() => ({
         columnVisibility,
-        globalFilter: searchValue,
+        globalFilter: searchValue, // Use immediate search value for responsive UI
     }), [columnVisibility, searchValue]);
 
-    // Memoize table options to prevent unnecessary re-renders
-    const tableOptions = useMemo(() => ({
-        data,
-        columns,
+    // Memoize static table configuration to prevent re-creation
+    const staticTableConfig = useMemo(() => ({
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
-        state: tableState,
-        onColumnVisibilityChange: setColumnVisibility,
-        onGlobalFilterChange: setSearchValue,
         enableColumnResizing: false,
         enableSorting: true,
-        enableFilters: true,
-        enableGlobalFilter: true,
+        enableFilters: true, // Enable client-side filtering for local data
+        enableGlobalFilter: true, // Enable global filter for local search
         initialState: {
             pagination: {
                 pageSize: 25,
             },
             sorting: [{ id: 'created_at', desc: true }],
         },
-    }), [data, columns, tableState]);
+    }), []);
+
+    // Memoize table options to prevent unnecessary re-renders
+    const tableOptions = useMemo(() => ({
+        data: filteredData || [], // Use filtered data
+        columns,
+        ...staticTableConfig,
+        state: tableState,
+        onColumnVisibilityChange: setColumnVisibility,
+        onGlobalFilterChange: setSearchValue,
+    }), [filteredData, columns, staticTableConfig, tableState]);
 
     // React Table instance with client-side operations
     const table = useReactTable(tableOptions);
 
-    // Debounce search input
-    const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
+    // Event handlers with proper dependencies
     const handleSearchChange = useCallback((value: string) => {
-        // Update local state immediately for UI responsiveness
         setSearchValue(value);
-
-        // Debounce the actual table filter
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
-        searchTimeoutRef.current = setTimeout(() => {
-            table.setGlobalFilter(value);
-        }, 300);
     }, []);
 
     const handleStateFilterChange = useCallback((value: string) => {
+        console.log('State filter changing from', stateFilter, 'to', value);
         setStateFilter(value);
-    }, []);
+    }, [stateFilter]);
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
         table.setPageSize(newPageSize);
-    }, []);
+    }, [table]);
 
     const handlePageChange = useCallback((newPage: number) => {
-        if (newPage >= 1 && newPage <= table.getPageCount()) {
+        const totalPages = table.getPageCount();
+        if (newPage >= 1 && newPage <= totalPages && totalPages > 0) {
             table.setPageIndex(newPage - 1);
         }
-    }, []);
+    }, [table]);
 
 
 
@@ -403,7 +432,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
 
     // Empty state component
     const EmptyState = () => (
-        <div className="text-center py-8">
+        <div className="text-center py-8 flex flex-col items-center justify-center">
             <div className="text-gray-400 mb-4">
                 <Inbox className="w-16 h-16 mx-auto" />
             </div>
@@ -412,10 +441,11 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         </div>
     );
 
-    const totalPages = table.getPageCount();
-    const currentPage = table.getState().pagination.pageIndex + 1;
+    // Safe pagination calculations to prevent errors with empty data
+    const totalPages = filteredData && filteredData.length > 0 ? table.getPageCount() : 0;
+    const currentPage = filteredData && filteredData.length > 0 ? table.getState().pagination.pageIndex + 1 : 1;
     const pageSize = table.getState().pagination.pageSize;
-    const totalItems = table.getFilteredRowModel().rows.length;
+    const totalItems = filteredData ? filteredData.length : 0;
 
     return (
         <div className={`space-y-4 ${className || ''}`}>
@@ -481,7 +511,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     onValueChange={handleStateFilterChange}
                 >
                     <SelectTrigger size={"XL"} >
-                        <SelectValue />
+                        <SelectValue placeholder="Select state..." />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All</SelectItem>
@@ -509,9 +539,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             <div className="border border-border-presentation-action-borderstyle rounded-lg overflow-x-auto">
                 {loading && <LoadingSkeleton />}
                 {error && <ErrorState />}
-                {!loading && !error && data.length === 0 && <EmptyState />}
+                {!loading && !error && filteredData.length === 0 && <EmptyState />}
 
-                {!loading && !error && data.length > 0 && (
+                {!loading && !error && filteredData.length > 0 && (
                     <Table theme={theme}>
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (
@@ -555,7 +585,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             </div>
 
             {/* Pagination */}
-            {!loading && !error && data.length > 0 && (
+            {!loading && !error && filteredData.length > 0 && (
                 <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-600">
                         Showing {((currentPage - 1) * pageSize) + 1} to{' '}
