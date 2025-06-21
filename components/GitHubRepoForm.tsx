@@ -129,7 +129,7 @@ export function GitHubRepoForm({ onRepoChange, currentOwner, currentRepo }: GitH
                                 <FormDescription className="text-content-presentation-global-secondary">
                                     Supports formats: https://github.com/owner/repo, github.com/owner/repo, or owner/repo
                                 </FormDescription>
-                                <FormMessage />
+                                <FormMessage className="text-content-presentation-state-negative" />
                             </FormItem>
                         )}
                     />

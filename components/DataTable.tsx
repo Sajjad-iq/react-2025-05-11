@@ -631,7 +631,6 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                                 serverPageCacheRef.current = {};
                                 tablePageCacheRef.current = {};
                                 setDataCache({});
-                                setServerPageCache({});
                                 setCurrentServerPage(1);
                                 setAllFetchedData([]);
                                 currentTablePageRef.current = 0;
