@@ -24,6 +24,8 @@ import {
 } from "./Table"
 import { Checkbox } from "./Checkbox"
 import { Button } from "./Button"
+import { ActionButton } from "./ActionButton"
+import { LinkButton } from "./LinkButton"
 import { Input } from "./Input"
 import {
     Select,
@@ -44,6 +46,17 @@ import {
 import { GitHubIssue, ColumnConfig, SortConfig, FilterConfig, PaginationConfig } from "../utils/types"
 import { useGitHubIssues } from "../hooks/useGitHubIssues"
 import { format } from 'date-fns'
+import {
+    RefreshCw,
+    Settings,
+    MessageCircle,
+    AlertTriangle,
+    Inbox,
+    ChevronFirst,
+    ChevronLast,
+    ChevronLeft,
+    ChevronRight
+} from 'lucide-react'
 
 interface DataTableProps<TData extends { id: string | number }, TValue> {
     columns: ColumnDef<TData, TValue>[]
@@ -135,94 +148,6 @@ const defaultColumns: ColumnConfig[] = [
     }
 ];
 
-export function DataTable<TData extends { id: string | number }, TValue>({
-    columns,
-    data,
-    theme = "default",
-}: DataTableProps<TData, TValue>) {
-    const [sorting, setSorting] = React.useState<SortingState>([])
-    const [rowSelection, setRowSelection] = React.useState({})
-
-    const table = useReactTable({
-        data,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        getSortedRowModel: getSortedRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        onSortingChange: setSorting,
-        onRowSelectionChange: setRowSelection,
-        enableRowSelection: true,
-        enableMultiRowSelection: true,
-        state: {
-            sorting,
-            rowSelection,
-        },
-    })
-
-    return (
-        <Table theme={theme}>
-            <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                        <TableHead isDummy >
-                            <Checkbox
-                                checked={table.getIsAllRowsSelected()}
-                                onCheckedChange={(checked) => {
-                                    table.toggleAllRowsSelected(!!checked)
-                                }}
-                            />
-                        </TableHead>
-                        {headerGroup.headers.map((header) => {
-                            const sortHandler = header.column.getToggleSortingHandler()
-                            return (
-                                <TableHead
-                                    key={header.id}
-                                    onSort={sortHandler ? () => sortHandler({}) : undefined}
-                                    sortType={header.column.getIsSorted() as "asc" | "desc" | undefined}
-                                >
-                                    {header.isPlaceholder
-                                        ? null
-                                        : flexRender(
-                                            header.column.columnDef.header,
-                                            header.getContext()
-                                        )}
-                                </TableHead>
-                            )
-                        })}
-                    </TableRow>
-                ))}
-            </TableHeader>
-            <TableBody>
-                {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row, i) => (
-                        <TableRow key={i + "row"} state={row.getIsSelected() ? "selected" : undefined}>
-                            <TableCell isDummy >
-                                <Checkbox
-                                    checked={row.getIsSelected()}
-                                    onCheckedChange={(checked) => {
-                                        row.toggleSelected(!!checked)
-                                    }}
-                                />
-                            </TableCell>
-                            {row.getVisibleCells().map((cell) => (
-                                <TableCell key={cell.id}>
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    ))
-                ) : (
-                    <TableRow>
-                        <TableCell colSpan={columns.length + 1} className="h-24 text-center">
-                            No results.
-                        </TableCell>
-                    </TableRow>
-                )}
-            </TableBody>
-        </Table>
-    )
-}
 
 // GitHub Issues DataTable Component
 export function GitHubIssuesDataTable({ owner, repo, className, theme = "default" }: GitHubIssuesDataTableProps) {
@@ -271,14 +196,12 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             id: 'number',
             header: 'Issue #',
             cell: ({ row }) => (
-                <a
+                <LinkButton
                     href={row.original.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+                    size="S"
                 >
                     #{row.original.number}
-                </a>
+                </LinkButton>
             ),
         },
         {
@@ -286,15 +209,14 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             header: 'Issue Title',
             cell: ({ row }) => (
                 <div className="max-w-md">
-                    <a
+                    <LinkButton
                         href={row.original.html_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-gray-900 hover:text-blue-600 font-medium line-clamp-2"
+                        size="M"
                         title={row.original.title}
+                        className="line-clamp-2"
                     >
                         {row.original.title}
-                    </a>
+                    </LinkButton>
                 </div>
             ),
         },
@@ -304,10 +226,9 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             cell: ({ row }) => (
                 <Badge
                     variant={row.original.state === 'open' ? 'green' : 'gray'}
+                    label={row.original.state}
                     className="capitalize"
-                >
-                    {row.original.state}
-                </Badge>
+                />
             ),
         },
         {
@@ -332,16 +253,20 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     {row.original.labels.slice(0, 3).map((label) => (
                         <Badge
                             key={label.id}
+                            label={label.name}
+                            variant="highlight"
+                            size="XS"
                             style={{ backgroundColor: `#${label.color}`, color: '#fff' }}
-                            className="text-xs px-1 py-0.5"
-                        >
-                            {label.name}
-                        </Badge>
+                            className="text-xs"
+                        />
                     ))}
                     {row.original.labels.length > 3 && (
-                        <Badge variant="gray" className="text-xs">
-                            +{row.original.labels.length - 3}
-                        </Badge>
+                        <Badge
+                            variant="gray"
+                            label={`+${row.original.labels.length - 3}`}
+                            size="XS"
+                            className="text-xs"
+                        />
                     )}
                 </div>
             ),
@@ -373,7 +298,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             header: 'Comments',
             cell: ({ row }) => (
                 <div className="flex items-center gap-1">
-                    <i className="ri-message-2-line text-gray-400" />
+                    <MessageCircle className="w-4 h-4 text-gray-400" />
                     <span className="text-sm">{row.original.comments}</span>
                 </div>
             ),
@@ -481,7 +406,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     const ErrorState = () => (
         <div className="text-center py-8">
             <div className="text-red-600 mb-4">
-                <i className="ri-error-warning-line text-4xl" />
+                <AlertTriangle className="w-16 h-16 mx-auto" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Issues</h3>
             <p className="text-gray-600 mb-4">{error?.message}</p>
@@ -495,7 +420,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
     const EmptyState = () => (
         <div className="text-center py-8">
             <div className="text-gray-400 mb-4">
-                <i className="ri-inbox-line text-4xl" />
+                <Inbox className="w-16 h-16 mx-auto" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Issues Found</h3>
             <p className="text-gray-600">Try adjusting your filters or search criteria.</p>
@@ -526,7 +451,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                         variant="BorderStyle"
                         disabled={loading || isFetching}
                     >
-                        <i className="ri-refresh-line mr-2" />
+                        <RefreshCw className="w-4 h-4 mr-2" />
                         Refresh
                     </Button>
 
@@ -534,7 +459,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="BorderStyle">
-                                <i className="ri-settings-3-line mr-2" />
+                                <Settings className="w-4 h-4 mr-2" />
                                 Columns
                             </Button>
                         </DropdownMenuTrigger>
@@ -595,7 +520,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             </div>
 
             {/* Table */}
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
                 {loading && <LoadingSkeleton />}
                 {error && <ErrorState />}
                 {!loading && !error && data.length === 0 && <EmptyState />}
@@ -614,7 +539,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                                                 key={header.id}
                                                 sortType={sortConfig ? (sortConfig.desc ? 'desc' : 'asc') : undefined}
                                                 onSort={column?.sortable ? () => handleSortChange(header.id) : undefined}
-                                                style={{ width: column?.width }}
+                                                style={{ minWidth: column?.width }}
                                             >
                                                 {header.isPlaceholder
                                                     ? null
@@ -651,39 +576,43 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
+                        <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(1)}
                             disabled={pagination.page === 1 || isFetching}
+                            size="M"
                         >
-                            First
-                        </Button>
-                        <Button
+                            <ChevronFirst className="w-4 h-4" />
+                        </ActionButton>
+                        <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(pagination.page - 1)}
                             disabled={pagination.page === 1 || isFetching}
+                            size="M"
                         >
-                            Previous
-                        </Button>
+                            <ChevronLeft className="w-4 h-4" />
+                        </ActionButton>
 
                         <span className="px-4 py-2 text-sm">
                             Page {pagination.page} of {totalPages}
                         </span>
 
-                        <Button
+                        <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(pagination.page + 1)}
                             disabled={pagination.page === totalPages || isFetching}
+                            size="M"
                         >
-                            Next
-                        </Button>
-                        <Button
+                            <ChevronRight className="w-4 h-4" />
+                        </ActionButton>
+                        <ActionButton
                             variant="BorderStyle"
                             onClick={() => handlePageChange(totalPages)}
                             disabled={pagination.page === totalPages || isFetching}
+                            size="M"
                         >
-                            Last
-                        </Button>
+                            <ChevronLast className="w-4 h-4" />
+                        </ActionButton>
                     </div>
                 </div>
             )}
