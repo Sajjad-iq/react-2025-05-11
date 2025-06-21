@@ -169,17 +169,18 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         }
     }, [columnVisibility, owner, repo]);
 
-    // Data fetching with TanStack Query hook - fetch all data for local operations
-    const { data, loading, error, refetch, totalCount, isRefetching, isFetching } = useGitHubIssues({
+    // Memoize the hook parameters to prevent infinite re-renders
+    const hookParams = useMemo(() => ({
         owner,
         repo,
         sorting: [], // No server-side sorting
         filters: { state: stateFilter }, // Only server-side state filter
         pagination: { page: 1, pageSize: 100, total: 0 }, // Fetch more data for local operations
         enabled: true
-    });
+    }), [owner, repo, stateFilter]);
 
-
+    // Data fetching with TanStack Query hook - fetch all data for local operations
+    const { data, loading, error, refetch, totalCount, isRefetching, isFetching } = useGitHubIssues(hookParams);
 
     // Memoized column definitions for performance
     const columns = useMemo<ColumnDef<GitHubIssue>[]>(() => [
@@ -309,18 +310,21 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         },
     ], []);
 
-    // React Table instance with client-side operations
-    const table = useReactTable({
+    // Memoize table state to prevent unnecessary re-renders
+    const tableState = useMemo(() => ({
+        columnVisibility,
+        globalFilter: searchValue,
+    }), [columnVisibility, searchValue]);
+
+    // Memoize table options to prevent unnecessary re-renders
+    const tableOptions = useMemo(() => ({
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
-        state: {
-            columnVisibility,
-            globalFilter: searchValue,
-        },
+        state: tableState,
         onColumnVisibilityChange: setColumnVisibility,
         onGlobalFilterChange: setSearchValue,
         enableColumnResizing: false,
@@ -333,7 +337,10 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
             },
             sorting: [{ id: 'created_at', desc: true }],
         },
-    });
+    }), [data, columns, tableState]);
+
+    // React Table instance with client-side operations
+    const table = useReactTable(tableOptions);
 
     // Debounce search input
     const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -349,7 +356,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
         searchTimeoutRef.current = setTimeout(() => {
             table.setGlobalFilter(value);
         }, 300);
-    }, [table]);
+    }, []);
 
     const handleStateFilterChange = useCallback((value: string) => {
         setStateFilter(value);
@@ -357,13 +364,13 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
         table.setPageSize(newPageSize);
-    }, [table]);
+    }, []);
 
     const handlePageChange = useCallback((newPage: number) => {
         if (newPage >= 1 && newPage <= table.getPageCount()) {
             table.setPageIndex(newPage - 1);
         }
-    }, [table]);
+    }, []);
 
 
 
@@ -527,6 +534,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                                             </TableHead>
                                         );
                                     })}
+                                    <TableHead className="w-full"></TableHead>
                                 </TableRow>
                             ))}
                         </TableHeader>
@@ -538,6 +546,7 @@ export function GitHubIssuesDataTable({ owner, repo, className, theme = "default
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                         </TableCell>
                                     ))}
+                                    <TableCell className="w-full"></TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
